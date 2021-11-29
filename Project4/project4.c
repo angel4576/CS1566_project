@@ -29,6 +29,7 @@ vec4 *vertices;
 vec4 *colors;
 
 int num_vertices;
+int one_cube_num = 36+96;
 
 float r = 1;//radius
 
@@ -40,8 +41,9 @@ vec4 init_p;
 
 vec4 origin = {0,0,0,1};//origin
 
-float size = 0.5;
-float length = 0.55;
+float size = 0.5/2;
+float length = 0.55/2;
+float edge_length;// = size + 2*(length-size);
 
 mat4 identity(){
   mat4 i = {{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
@@ -205,6 +207,13 @@ void build_edge(vec4 *v){
 
 }
 
+void build_cubes(){
+  printf("%f\n", edge_length);
+  for(int i = one_cube_num; i < 2*one_cube_num; i++){
+    vertices[i] = mat_vec_mul(trans_m(-edge_length,0,0), vertices[i-one_cube_num]);
+  }
+}
+
 void set_cube_vertex(vec4 *v){
     mat4 r_y = rotate_y(PI/2);
     mat4 r_z = rotate_z(PI/2);
@@ -271,6 +280,16 @@ void set_cube_color(vec4 *c){
    for(int i = 36; i < num_vertices; i++){
       c[i] = set(0,0,0,1);
     }
+}
+
+void translate_cube(){
+  edge_length = size + 2*(length-size);
+  
+  mat4 t = trans_m(-size/2, -size/2, -(length-size));
+  //t = mat_mat_mul(sca_m(0.5,0.5,0.5), t);
+  for(int i = 0; i < one_cube_num; i++){
+    vertices[i] = mat_vec_mul(t, vertices[i]);
+  }
 }
 
 void set_sphere_vertex(vec4 *v){    
@@ -435,12 +454,15 @@ void init(void)
   
   }else if(input ==2){
     //cube
-    num_vertices = 36+96;
+    num_vertices = 2*one_cube_num;
     vertices = (vec4*)malloc(sizeof(vec4)*num_vertices);
     colors = (vec4*)malloc(sizeof(vec4)*num_vertices);
 
     set_cube_vertex(vertices);
     set_cube_color(colors);
+    translate_cube();
+
+    build_cubes();
 
     for(int i = 0; i < num_vertices; i++){
       printf("%d ", i);
