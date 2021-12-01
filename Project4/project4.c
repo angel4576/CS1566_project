@@ -207,10 +207,52 @@ void build_edge(vec4 *v){
 
 }
 
-void build_cubes(){
-  printf("%f\n", edge_length);
+void build_two_layers(){
+  mat4 t = trans_m(0,0,-edge_length);
+  for(int i = 9*one_cube_num; i < 18*one_cube_num; i++){
+    vertices[i] = mat_vec_mul(t, vertices[i-9*one_cube_num]);
+  }
+
+  mat4 t_2 = trans_m(0,0,-2*edge_length);
+  for(int i = 18*one_cube_num; i < 27*one_cube_num; i++){
+    vertices[i] = mat_vec_mul(t_2, vertices[i-18*one_cube_num]);
+  }
+
+}
+
+void build_first_layer(){
+  printf("edge length: %f\n", edge_length);
+  //second cube. left to the center
   for(int i = one_cube_num; i < 2*one_cube_num; i++){
     vertices[i] = mat_vec_mul(trans_m(-edge_length,0,0), vertices[i-one_cube_num]);
+  }
+  //third. right
+  for(int i = 2*one_cube_num; i < 3*one_cube_num; i++){
+    vertices[i] = mat_vec_mul(trans_m(edge_length,0,0), vertices[i-2*one_cube_num]);
+  }
+  //forth. up
+  for(int i = 3*one_cube_num; i < 4*one_cube_num; i++){
+    vertices[i] = mat_vec_mul(trans_m(0,edge_length,0), vertices[i-3*one_cube_num]);
+  }
+  //fifth. down
+  for(int i = 4*one_cube_num; i < 5*one_cube_num; i++){
+    vertices[i] = mat_vec_mul(trans_m(0,-edge_length,0), vertices[i-4*one_cube_num]);
+  }
+  //sixth. top left
+  for(int i = 5*one_cube_num; i < 6*one_cube_num; i++){
+    vertices[i] = mat_vec_mul(trans_m(-edge_length,edge_length,0), vertices[i-5*one_cube_num]);
+  }
+  //seventh. top right
+  for(int i = 6*one_cube_num; i < 7*one_cube_num; i++){
+    vertices[i] = mat_vec_mul(trans_m(edge_length,edge_length,0), vertices[i-6*one_cube_num]);
+  }
+  //eighth. down left
+  for(int i = 7*one_cube_num; i < 8*one_cube_num; i++){
+    vertices[i] = mat_vec_mul(trans_m(-edge_length,-edge_length,0), vertices[i-7*one_cube_num]);
+  }
+  //ninth. down right
+  for(int i = 8*one_cube_num; i < 9*one_cube_num; i++){
+    vertices[i] = mat_vec_mul(trans_m(edge_length,-edge_length,0), vertices[i-8*one_cube_num]);
   }
 }
 
@@ -260,24 +302,24 @@ void set_cube_vertex(vec4 *v){
     
 }
 
-void set_cube_color(vec4 *c){
-  for(int i =0; i < 6*6; i++){
-      if(i >= 0 && i < 6){//front
+void set_cube_color(vec4 *c, int num){
+  for(int i = num; i < num+36; i++){
+      if(i >= num && i < num+6){//front
         c[i] = set(0,1,0,1);
-      }else if(i >= 6 && i < 12){//back
+      }else if(i >= num+6 && i < num+12){//back
         c[i] = set(0,0,1,1);
-      }else if(i >= 2*6 && i < 3*6){//third face, right
+      }else if(i >= num+12 && i < num+18){//third face, right
         c[i] = set(1,0,0,1);
-      }else if(i >= 3*6 && i < 4*6){//four face, left
+      }else if(i >= num+18 && i < num+24){//four face, left
         c[i] = set(1,0.5,0,1);
-      }else if(i >= 4*6 && i < 5*6){//fifth, bottom
+      }else if(i >= num+24 && i < num+30){//fifth, bottom
         c[i] = set(1,1,0.3,1);
-      }else if(i >= 5*6 && i < 6*6){//top
+      }else if(i >= num+30 && i < num+36){//top
         c[i] = set(1,1,1,1);
       }
   }
 
-   for(int i = 36; i < num_vertices; i++){
+   for(int i = num+36; i < num+one_cube_num; i++){
       c[i] = set(0,0,0,1);
     }
 }
@@ -454,20 +496,32 @@ void init(void)
   
   }else if(input ==2){
     //cube
-    num_vertices = 2*one_cube_num;
+    num_vertices = 27*one_cube_num;//cube ver_num
     vertices = (vec4*)malloc(sizeof(vec4)*num_vertices);
     colors = (vec4*)malloc(sizeof(vec4)*num_vertices);
-
+  
     set_cube_vertex(vertices);
-    set_cube_color(colors);
+    //set all cubes colors
+    for(int i = 0; i < 27; i++){
+      set_cube_color(colors, i*one_cube_num);//pass the start vertex of each cube
+    }
+    
+    for(int i = 0; i < num_vertices; i++){
+      printf("%d ", i);
+      print_vec(colors[i]);
+    }
+
     translate_cube();
 
-    build_cubes();
+    build_first_layer();
+    build_two_layers();
 
+    /*
     for(int i = 0; i < num_vertices; i++){
       printf("%d ", i);
       print_vec(vertices[i]);
     }
+    */
   }
    
   
