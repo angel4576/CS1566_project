@@ -22,7 +22,20 @@
 #define PI 3.141592 
 
 GLuint ctm_location;
+GLuint model_view_location;
+GLuint projection_location;
+
 mat4 ctm;
+mat4 ctm2;
+mat4 model_view = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
+mat4 projection = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};;
+
+//vec4 eye = {1, 0.8, 1, 1};//vrp
+//vec4 at = {0, 0, 0, 1};//set(0, 0, -100, 1);
+
+vec4 eye = {1, 0.8, 1, 1};//vrp
+vec4 at = {0, 0, 0, 1};//set(0, 0, -100, 1);
+vec4 up = {0, 1, 0, 0};//set(0, 1, 0, 0);//y-axis
 
 //vertices array
 vec4 *vertices;
@@ -31,19 +44,17 @@ vec4 *colors;
 int num_vertices;
 int one_cube_num = 36+96;
 
-float r = 1;//radius
+float size = 0.5/2;
+float length = 0.55/2;
+float edge_length;
 
+float r = 1;//radius
 //position when click
 GLfloat init_x;
 GLfloat init_y;
 GLfloat init_z;
 vec4 init_p;
-
 vec4 origin = {0,0,0,1};//origin
-
-float size = 0.5/2;
-float length = 0.55/2;
-float edge_length;// = size + 2*(length-size);
 
 mat4 identity(){
   mat4 i = {{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
@@ -221,7 +232,7 @@ void build_two_layers(){
 }
 
 void build_first_layer(){
-  printf("edge length: %f\n", edge_length);
+  //printf("edge length: %f\n", edge_length);
   //second cube. left to the center
   for(int i = one_cube_num; i < 2*one_cube_num; i++){
     vertices[i] = mat_vec_mul(trans_m(-edge_length,0,0), vertices[i-one_cube_num]);
@@ -327,7 +338,7 @@ void set_cube_color(vec4 *c, int num){
 void translate_cube(){
   edge_length = size + 2*(length-size);
   
-  mat4 t = trans_m(-size/2, -size/2, -(length-size));
+  mat4 t = trans_m(-size/2, -size/2, -(length-size)+3*size/2);
   //t = mat_mat_mul(sca_m(0.5,0.5,0.5), t);
   for(int i = 0; i < one_cube_num; i++){
     vertices[i] = mat_vec_mul(t, vertices[i]);
@@ -499,23 +510,28 @@ void init(void)
     num_vertices = 27*one_cube_num;//cube ver_num
     vertices = (vec4*)malloc(sizeof(vec4)*num_vertices);
     colors = (vec4*)malloc(sizeof(vec4)*num_vertices);
-  
+    //set model view
+    model_view = look_at(eye, at, up);
+    //set frustrum
+    projection = frustum(-0.25, 0.25, -0.25, 0.25, -0.5, -10);//left, right, bottom, top, near, far
+    //set one cube vertex
     set_cube_vertex(vertices);
-    //set all cubes colors
-    for(int i = 0; i < 27; i++){
-      set_cube_color(colors, i*one_cube_num);//pass the start vertex of each cube
-    }
-    
-    for(int i = 0; i < num_vertices; i++){
-      printf("%d ", i);
-      print_vec(colors[i]);
-    }
-
     translate_cube();
 
     build_first_layer();
     build_two_layers();
 
+    //set all cubes colors
+    for(int i = 0; i < 27; i++){
+      set_cube_color(colors, i*one_cube_num);//pass the start vertex of each cube
+    }
+    
+    //print color for debug
+    for(int i = 0; i < num_vertices; i++){
+      printf("%d ", i);
+      print_vec(colors[i]);
+    }
+    printf("edge length: %f\n", edge_length);
     /*
     for(int i = 0; i < num_vertices; i++){
       printf("%d ", i);
@@ -551,7 +567,12 @@ void init(void)
 
     ctm_location = glGetUniformLocation(program, "ctm");//ctm
     ctm = identity();//identity matrix
+    ctm2 = identity();
 
+    model_view_location = glGetUniformLocation(program, "model_view");
+    projection_location = glGetUniformLocation(program, "projection");
+
+    glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
     glClearColor(1.0, 1.0, 0.8, 1.0);
     glDepthRange(1,0);
@@ -563,9 +584,19 @@ void display(void)
 
     glPolygonMode(GL_FRONT, GL_FILL);
     glPolygonMode(GL_BACK, GL_LINE);
+    //ctm
+    //glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm);//send  matrices  into  the  graphic  pipeline 
+    //model view
+    glUniformMatrix4fv(model_view_location, 1, GL_FALSE, (GLfloat *) &model_view);
+    //projection
+    glUniformMatrix4fv(projection_location, 1, GL_FALSE, (GLfloat *) &projection);
+    
     
     glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm);//send  matrices  into  the  graphic  pipeline 
-    glDrawArrays(GL_TRIANGLES, 0, num_vertices);
+    glDrawArrays(GL_TRIANGLES, 0, 9*one_cube_num);
+
+    glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm2);
+    glDrawArrays(GL_TRIANGLES, 9*one_cube_num, num_vertices);
 
     glutSwapBuffers();
 }
@@ -695,8 +726,9 @@ void keyboard(unsigned char key, int mousex, int mousey)
     	glutLeaveMainLoop();
     }
 
-    if(key == 'a'){
-      ctm = mat_mat_mul(ctm, trans_m(-0.1,0,0));
+    if(key == 'f'){
+      ctm = mat_mat_mul(rotate_z(PI/8), ctm);
+
     }
     glutPostRedisplay();
 }
