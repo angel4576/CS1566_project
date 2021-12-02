@@ -27,12 +27,11 @@ GLuint projection_location;
 
 mat4 ctm;
 mat4 ctm2;
+mat4* ctm_array;
 mat4 model_view = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
 mat4 projection = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};;
 
-//vec4 eye = {1, 0.8, 1, 1};//vrp
-//vec4 at = {0, 0, 0, 1};//set(0, 0, -100, 1);
-
+//eye at up
 vec4 eye = {1, 0.8, 1, 1};//vrp
 vec4 at = {0, 0, 0, 1};//set(0, 0, -100, 1);
 vec4 up = {0, 1, 0, 0};//set(0, 1, 0, 0);//y-axis
@@ -42,7 +41,7 @@ vec4 *vertices;
 vec4 *colors;
 
 int num_vertices;
-int one_cube_num = 36+96;
+int one_cube_num = 36+96;//132
 
 float size = 0.5/2;
 float length = 0.55/2;
@@ -337,9 +336,8 @@ void set_cube_color(vec4 *c, int num){
 
 void translate_cube(){
   edge_length = size + 2*(length-size);
-  
-  mat4 t = trans_m(-size/2, -size/2, -(length-size)+3*size/2);
-  //t = mat_mat_mul(sca_m(0.5,0.5,0.5), t);
+  //translate to the origin
+  mat4 t = trans_m(-size/2, -size/2, 2*(length-size)+3*size/2);
   for(int i = 0; i < one_cube_num; i++){
     vertices[i] = mat_vec_mul(t, vertices[i]);
   }
@@ -501,7 +499,7 @@ void init(void)
     num_vertices = 36*6*16 + 36*3*2;
     vertices = (vec4*)malloc(sizeof(vec4)*num_vertices);
     colors = (vec4*)malloc(sizeof(vec4)*num_vertices);
-    
+
     set_sphere_vertex(vertices);
     set_sphere_color(colors);
   
@@ -510,6 +508,12 @@ void init(void)
     num_vertices = 27*one_cube_num;//cube ver_num
     vertices = (vec4*)malloc(sizeof(vec4)*num_vertices);
     colors = (vec4*)malloc(sizeof(vec4)*num_vertices);
+    
+    ctm_array = (mat4*)malloc(sizeof(mat4)*27);
+    for(int i = 0; i < 27; i++){
+      ctm_array[i] = identity();
+    }
+
     //set model view
     model_view = look_at(eye, at, up);
     //set frustrum
@@ -527,17 +531,19 @@ void init(void)
     }
     
     //print color for debug
+    /*
     for(int i = 0; i < num_vertices; i++){
       printf("%d ", i);
       print_vec(colors[i]);
     }
+    */
     printf("edge length: %f\n", edge_length);
-    /*
+    
     for(int i = 0; i < num_vertices; i++){
       printf("%d ", i);
       print_vec(vertices[i]);
     }
-    */
+    
   }
    
   
@@ -591,12 +597,14 @@ void display(void)
     //projection
     glUniformMatrix4fv(projection_location, 1, GL_FALSE, (GLfloat *) &projection);
     
+    //CTM
     
-    glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm);//send  matrices  into  the  graphic  pipeline 
-    glDrawArrays(GL_TRIANGLES, 0, 9*one_cube_num);
-
-    glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm2);
-    glDrawArrays(GL_TRIANGLES, 9*one_cube_num, num_vertices);
+    for(int i = 0; i < 27; i++){
+      glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm_array[i]);//send  matrices  into  the  graphic  pipeline 
+      glDrawArrays(GL_TRIANGLES, i*one_cube_num, one_cube_num);
+      //glDrawArrays(GL_TRIANGLES, one_cube_num, 2*one_cube_num);
+      
+    }
 
     glutSwapBuffers();
 }
@@ -726,9 +734,28 @@ void keyboard(unsigned char key, int mousex, int mousey)
     	glutLeaveMainLoop();
     }
 
-    if(key == 'f'){
-      ctm = mat_mat_mul(rotate_z(PI/8), ctm);
+    if(key == 'f'){//front
+      //ctm = mat_mat_mul(rotate_z(PI/8), ctm);
+      for(int i = 0; i < 9; i++){
+        ctm_array[i] = mat_mat_mul(rotate_z(PI/8), ctm_array[i]);
+      }
+      /*
+      for(int i = 0; i < 27; i++){
+        print_mat(ctm_array[i]);
+      }
+      */
+    }
 
+    if(key == 'u'){//up
+      for(int i = 0; i < 27; i++){
+        if(i == 5 || i == 3 || i == 6 ||
+          i == 14 || i ==12 || i == 15 ||
+          i == 23 || i == 21 || i == 24){
+            ctm_array[i] = mat_mat_mul(rotate_y(PI/8), ctm_array[i]);
+
+
+        }
+      }
     }
     glutPostRedisplay();
 }
