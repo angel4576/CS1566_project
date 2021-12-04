@@ -26,7 +26,6 @@ GLuint model_view_location;
 GLuint projection_location;
 
 mat4 ctm;
-mat4 ctm2;
 mat4* ctm_array;
 mat4 model_view = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
 mat4 projection = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};;
@@ -35,6 +34,33 @@ mat4 projection = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};;
 vec4 eye = {1, 0.8, 1, 1};//vrp
 vec4 at = {0, 0, 0, 1};//set(0, 0, -100, 1);
 vec4 up = {0, 1, 0, 0};//set(0, 1, 0, 0);//y-axis
+
+int front[9] = {7, 4, 8, 1, 0, 2, 5, 3, 6};
+int back[9] = {26, 22, 25, 20, 18, 19, 24, 21, 23};
+int top[9] = {5, 3, 6, 14, 12, 15, 23, 21, 24};
+int down[9] = {25, 22, 26, 16, 13, 17, 7, 4, 8};
+int left[9] = {25, 16, 7, 19, 10, 1, 23, 14, 5};
+int right[9] = {8, 17, 26, 2, 11, 20, 6, 15, 24};
+//for animation
+typedef enum{
+  NONE = 0,
+  FRONT,
+  BACK,
+  LEFT,
+  RIGHT,
+  TOP,
+  DOWN,
+
+}state;
+
+int is_animate = 1;
+int start_shuffle = 0;
+state current_state = NONE;
+float current_angle = 0;
+float change_angle = PI/128;
+
+int step = 0;
+int max_step = 30;
 
 //vertices array
 vec4 *vertices;
@@ -424,11 +450,6 @@ void set_sphere_vertex(vec4 *v){
       bottom_st = v[i+1];
     }
     
-    
-    
-    
-    
-    
 }
 
 void set_sphere_color(vec4 *c){
@@ -490,6 +511,164 @@ GLfloat change_y(int y){
 
 }
 
+void turn_cube(int face){
+  is_animate = 1;
+  if(face == 1){//front
+    current_state = FRONT;
+        int temp[9] = {right[0], right[3], right[6], down[7], 0, top[1], left[2], left[5], left[8]};
+        for(int i = 0; i < 9; i++){
+          front[i] = temp[i];
+        }
+
+      //modify top
+      top[0] = front[6];
+      top[1] = front[7];
+      top[2] = front[8];
+      //modify right
+      right[0] = front[2];
+      right[3] = front[5];
+      right[6] = front[8];
+      //modify left
+      left[2] = front[0];
+      left[5] = front[3];
+      left[8] = front[6];
+      //modify down
+      down[6] = front[0];
+      down[7] = front[1];
+      down[8] = front[2];
+
+  }else if(face == 2){//back
+    current_state = BACK;
+      int temp[9] = {left[0], left[3], left[6], down[1], 18, top[7], right[2], right[5], right[8]};
+      for(int i = 0; i < 9; i++){
+        back[i] = temp[i];
+      }
+
+      //modify top
+      top[6] = back[8];
+      top[7] = back[7];
+      top[8] = back[6];
+      //modify right
+      right[2] = back[0];
+      right[5] = back[3];
+      right[8] = back[6];
+      //modify left
+      left[0] = back[2];
+      left[3] = back[5];
+      left[6] = back[8];
+      //modify down
+      down[0] = back[2];
+      down[1] = back[1];
+      down[2] = back[0];
+
+  }else if(face == 3){//left
+    current_state = LEFT;
+
+      int temp[9] = {front[0], front[3], front[6], down[3], 10, top[3], back[2], back[5], back[8]};
+      for(int i = 0; i < 9; i++){
+        left[i] = temp[i];
+      }
+
+      //modify front
+      front[0] = left[2];
+      front[3] = left[5];
+      front[6] = left[8];
+      //modify top
+      top[6] = left[6];
+      top[3] = left[7];
+      top[0] = left[8];
+      //modify down
+      down[0] = left[0];
+      down[3] = left[1];
+      down[6] = left[2];
+      //modify back
+      back[2] = left[0];
+      back[5] = left[3];
+      back[8] = left[6];
+      
+  }else if(face == 4){//right
+    current_state = RIGHT;
+      //for(int i = 0; i < 9; i++){
+        //ctm_array[right[i]] = mat_mat_mul(rotate_x(-PI/2), ctm_array[right[i]]);//set ctms
+      //}
+      int temp[9] = {back[0], back[3], back[6], down[5], 11, top[5], front[2], front[5], front[8]};
+      for(int i = 0; i < 9; i++){
+        right[i] = temp[i];
+      }
+
+      //modify front
+      front[2] = right[0];
+      front[5] = right[3];
+      front[8] = right[6];
+      //modify top
+      top[2] = right[6];
+      top[5] = right[7];
+      top[8] = right[8];
+      //modify down
+      down[2] = right[2];
+      down[5] = right[1];
+      down[8] = right[0];
+      //modify back
+      back[0] = right[2];
+      back[3] = right[5];
+      back[6] = right[8];
+      
+  }else if(face == 5){//top
+    current_state = TOP;
+      int temp[9] = {right[6], right[7], right[8], front[7], 12, back[7], left[8], left[7], left[6]};
+      for(int i = 0; i < 9; i++){
+        top[i] = temp[i];
+      }
+      
+      //modify front
+      front[6] = top[0];
+      front[7] = top[1];
+      front[8] = top[2];
+      //modify right
+      right[6] = top[2];
+      right[7] = top[5];
+      right[8] = top[8];
+      //modify left
+      left[8] = top[0];
+      left[7] = top[3];
+      left[6] = top[6];
+      //modify back
+      back[6] = top[8];
+      back[7] = top[7];
+      back[8] = top[6];
+
+  }else if(face == 6){//down
+    current_state = DOWN;
+      int temp[9] = {right[2], right[1], right[0], back[1], 13, front[1], left[0], left[1], left[2]};
+      for(int i = 0; i < 9; i++){
+        down[i] = temp[i];
+      }
+      
+      //modify front
+      front[0] = down[6];
+      front[1] = down[7];
+      front[2] = down[8];
+      //modify right
+      right[0] = down[8];
+      right[1] = down[5];
+      right[2] = down[2];
+      //modify left
+      left[0] = down[0];
+      left[1] = down[3];
+      left[2] = down[6];
+      //modify back
+      back[0] = down[2];
+      back[1] = down[1];
+      back[2] = down[0];
+  }
+}
+
+int* shuffle(){
+  //f:1 b:2 l:3 r:4 u:5 d:6
+  int formula[20] = {1, 6, 6, 2, 5, 3, 3, 3, 2, 2, 2, 6, 6, 1, 5, 5, 4, 4, 1, 1};
+  
+
+}
 
 void init(void)
 {   
@@ -517,7 +696,7 @@ void init(void)
     //set model view
     model_view = look_at(eye, at, up);
     //set frustrum
-    projection = frustum(-0.25, 0.25, -0.25, 0.25, -0.5, -10);//left, right, bottom, top, near, far
+    projection = frustum(-0.25, 0.25, -0.30, 0.2, -0.5, -10);//left, right, bottom, top, near, far
     //set one cube vertex
     set_cube_vertex(vertices);
     translate_cube();
@@ -530,6 +709,9 @@ void init(void)
       set_cube_color(colors, i*one_cube_num);//pass the start vertex of each cube
     }
     
+    //
+    
+
     //print color for debug
     /*
     for(int i = 0; i < num_vertices; i++){
@@ -537,8 +719,9 @@ void init(void)
       print_vec(colors[i]);
     }
     */
-    printf("edge length: %f\n", edge_length);
+    //printf("edge length: %f\n", edge_length);
     
+    //print vertices array
     for(int i = 0; i < num_vertices; i++){
       printf("%d ", i);
       print_vec(vertices[i]);
@@ -573,7 +756,6 @@ void init(void)
 
     ctm_location = glGetUniformLocation(program, "ctm");//ctm
     ctm = identity();//identity matrix
-    ctm2 = identity();
 
     model_view_location = glGetUniformLocation(program, "model_view");
     projection_location = glGetUniformLocation(program, "projection");
@@ -598,7 +780,6 @@ void display(void)
     glUniformMatrix4fv(projection_location, 1, GL_FALSE, (GLfloat *) &projection);
     
     //CTM
-    
     for(int i = 0; i < 27; i++){
       glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm_array[i]);//send  matrices  into  the  graphic  pipeline 
       glDrawArrays(GL_TRIANGLES, i*one_cube_num, one_cube_num);
@@ -734,35 +915,187 @@ void keyboard(unsigned char key, int mousex, int mousey)
     	glutLeaveMainLoop();
     }
 
+    if(key == 'x'){
+      start_shuffle = 1;
+      is_animate = 0;
+      
+    }
+
     if(key == 'f'){//front
-      //ctm = mat_mat_mul(rotate_z(PI/8), ctm);
+      turn_cube(1);
+    }
+
+    if(key == 'F'){//front. counter clockwise
       for(int i = 0; i < 9; i++){
         ctm_array[i] = mat_mat_mul(rotate_z(PI/8), ctm_array[i]);
       }
-      /*
-      for(int i = 0; i < 27; i++){
-        print_mat(ctm_array[i]);
+    }
+
+    if(key == 'b'){//back
+      turn_cube(2);
+    }
+
+    if(key == 'B'){//front. counter clockwise
+      for(int i = 0; i < 9; i++){
+        ctm_array[i] = mat_mat_mul(rotate_z(PI/8), ctm_array[i]);
       }
-      */
     }
 
     if(key == 'u'){//up
-      for(int i = 0; i < 27; i++){
-        if(i == 5 || i == 3 || i == 6 ||
-          i == 14 || i ==12 || i == 15 ||
-          i == 23 || i == 21 || i == 24){
-            ctm_array[i] = mat_mat_mul(rotate_y(PI/8), ctm_array[i]);
-
-
-        }
-      }
+      turn_cube(5);
     }
+
+    if(key == 'd'){//down
+      turn_cube(6);
+    }
+
+    if(key == 'l'){
+      turn_cube(3);
+    }
+
+    if(key == 'r'){
+      turn_cube(4);
+    }
+
     glutPostRedisplay();
 }
+
+
 
 void reshape(int width, int height)
 {
     glViewport(0, 0, 512, 512);
+}
+
+void idle(void){
+  //int times = (PI/2)/(change_angle);
+  int times = 64; //PI/2 / PI/128;
+  printf("%d\n", times);
+  if(is_animate){
+
+    if(current_state == LEFT){
+      current_angle += change_angle;
+      //SET CTMs
+      for(int i = 0; i < 9; i++){
+        ctm_array[left[i]] = mat_mat_mul(rotate_x(change_angle), ctm_array[left[i]]);//set ctms
+      }
+
+      if(current_angle >= times*change_angle){
+        current_angle = 0;
+        //current_state = NONE;
+        is_animate = 0;
+      }
+
+    }else if(current_state == RIGHT){
+      current_angle += change_angle;
+      for(int i = 0; i < 9; i++){
+          ctm_array[right[i]] = mat_mat_mul(rotate_x(-change_angle), ctm_array[right[i]]);//set ctms
+      }
+
+      if(current_angle >= times*change_angle){
+        printf("stop: %f\n", current_angle);
+        current_angle = 0;
+        //current_state = NONE;
+        is_animate = 0;
+      }
+    
+    }else if(current_state == FRONT){
+      current_angle += change_angle;
+      //SET CTMs
+      for(int i = 0; i < 9; i++){
+        ctm_array[front[i]] = mat_mat_mul(rotate_z(-change_angle), ctm_array[front[i]]);
+      }
+
+      if(current_angle >= times*change_angle){
+        //printf("angle: %f\n", current_angle);
+        current_angle = 0;
+        //current_state = NONE;
+        is_animate = 0;
+      }
+
+    }else if(current_state == BACK){
+      current_angle += change_angle;
+      //SET CTMs
+      for(int i = 0; i < 9; i++){
+        ctm_array[back[i]] = mat_mat_mul(rotate_z(change_angle), ctm_array[back[i]]);
+      }
+
+      if(current_angle >= times*change_angle){
+        current_angle = 0;
+        is_animate = 0;
+        //current_state = NONE;
+      }
+
+    }else if(current_state == TOP){
+      current_angle += change_angle;
+      //SET CTMs
+      for(int i = 0; i < 9; i++){
+        ctm_array[top[i]] = mat_mat_mul(rotate_y(-change_angle), ctm_array[top[i]]);
+      }
+
+      if(current_angle >= times*change_angle){
+        current_angle = 0;
+        is_animate = 0;
+        //current_state = NONE;
+      }
+
+    }else if(current_state == DOWN){
+      current_angle += change_angle;
+      //SET CTMs
+      for(int i = 0; i < 9; i++){
+        ctm_array[down[i]] = mat_mat_mul(rotate_y(change_angle), ctm_array[down[i]]);
+      }
+
+      if(current_angle >= times*change_angle){
+        current_angle = 0;
+        is_animate = 0;
+        //current_state = NONE;
+      }
+
+    }else{
+      //is_animate = 0;
+    }
+  
+
+  }else{//is_animation = 0
+
+    if(start_shuffle){
+      /*
+      int formula[28] = {1, 6, 6, 2, 5, 3, 3, 3, 5, 3, 
+                        3, 3, 5, 3, 3, 3, 2, 2, 2, 6, 
+                        6, 1, 5, 5, 4, 4, 1, 1};
+      */
+
+      int formula[30] = {1, 6, 6, 3, 3, 2, 6, 2, 2, 2, 1, 1,
+                         5, 5, 5, 1, 5, 1, 1, 5, 5, 1, 
+                         1, 1, 3, 6, 1, 1, 1, 5};
+
+      if(formula[step] == 1){
+          turn_cube(1);
+        }else if(formula[step] == 2){
+          turn_cube(2);
+        }else if(formula[step] == 3){
+          turn_cube(3);
+        }else if(formula[step] == 4){
+          turn_cube(4);
+        }else if(formula[step] == 5){
+          turn_cube(5);
+        }else if(formula[step] == 6){
+          turn_cube(6);
+        }
+
+        if(step == max_step){
+          current_state = NONE;
+          is_animate = 0;
+          start_shuffle = 0;
+        }
+ 
+      step++;
+
+    }
+  }
+
+  glutPostRedisplay();
 }
 
 int main(int argc, char **argv)
@@ -776,9 +1109,11 @@ int main(int argc, char **argv)
     init();
     glutDisplayFunc(display);
     glutKeyboardFunc(keyboard);
+    
     glutMouseFunc(mouse);//mouse
     glutMotionFunc(motion);//Motion
     glutReshapeFunc(reshape);
+    glutIdleFunc(idle);
     glutMainLoop();
 
     free(vertices);
