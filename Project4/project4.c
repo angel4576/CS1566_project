@@ -18,7 +18,6 @@
 
 #define BUFFER_OFFSET( offset )   ((GLvoid*) (offset))
 
-
 #define PI 3.141592 
 
 GLuint ctm_location;
@@ -30,11 +29,33 @@ mat4* ctm_array;
 mat4 model_view = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
 mat4 projection = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};;
 
-//eye at up
-vec4 eye = {1, 0.8, 1, 1};//vrp
-vec4 at = {0, 0, 0, 1};//set(0, 0, -100, 1);
-vec4 up = {0, 1, 0, 0};//set(0, 1, 0, 0);//y-axis
+//light source
+vec4 light_ambient = {0,0,0,0};//L_ra
+vec4 light_diffuse = {0,0,0,0};
+vec4 light_specular = {0,0,0,0};
+//point source
+vec4 light_position = {1, 2, 3, 1};//point
 
+//material
+vec4 reflect_ambient = {0,0,0,0};//k_ra
+vec4 reflect_diffuse = {0,0,0,0};
+vec4 reflect_specular = {0,0,0,0};
+GLfloat shininess = 0;
+//material material = {};
+
+//distance-attenuation
+//1/(a+bd+cd^2)
+GLfloat attenuation_constant;
+GLfloat attenuation_linear;
+GLfloat attenuation_quadratic;
+
+
+//eye at up
+//vec4 eye = {1, 0.8, 1, 1};//vrp. x = 1, z = 1
+vec4 eye = {0, 0, 1, 1};
+vec4 at = {0, 0, 0, 1};//set(0, 0, -100, 1);//origin
+vec4 up = {0, 1, 0, 0};//set(0, 1, 0, 0);//y-axis
+//number for each face of the cube
 int front[9] = {7, 4, 8, 1, 0, 2, 5, 3, 6};
 int back[9] = {26, 22, 25, 20, 18, 19, 24, 21, 23};
 int top[9] = {5, 3, 6, 14, 12, 15, 23, 21, 24};
@@ -57,7 +78,7 @@ int is_animate = 1;
 int start_shuffle = 0;
 state current_state = NONE;
 float current_angle = 0;
-float change_angle = PI/128;
+float change_angle = PI/64;
 
 int step = 0;
 int max_step = 30;
@@ -65,7 +86,7 @@ int max_step = 30;
 //vertices array
 vec4 *vertices;
 vec4 *colors;
-
+//
 int num_vertices;
 int one_cube_num = 36+96;//132
 
@@ -80,6 +101,31 @@ GLfloat init_y;
 GLfloat init_z;
 vec4 init_p;
 vec4 origin = {0,0,0,1};//origin
+
+//1/(a+bd+cd^2)
+GLfloat attenuation(GLfloat d){//d = magnitude(light_position - vertex_pos);
+  return 1/(attenuation_constant + (attenuation_linear * d) 
+            + (attenuation_quadratic * d * d));
+}
+
+float calculate_vel(vec4 axis, vec4 lookat){
+  //vec4 e_a = vec_vec_sub(eye, at);
+  //vec4 axis = set(0,0,1,0);
+  float dot = dot_product(lookat, axis);
+  float co = dot / (vec_mag(lookat) * vec_mag(axis));
+ 
+  return co;
+}
+
+int float_equal(float a, float b){
+  int temp_a=(int)(a *10000);
+  int temp_b=(int)(b *10000);
+  
+  if(temp_a >= temp_b)
+    return 1;
+
+  return 0;
+}
 
 mat4 identity(){
   mat4 i = {{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
@@ -339,6 +385,32 @@ void set_cube_vertex(vec4 *v){
 }
 
 void set_cube_color(vec4 *c, int num){
+  vec4 ambient;
+  vec4 diffuse = {0,0,0,1};
+  vec4 specular = {0,0,0,1};
+  
+  //calculate ambient
+  ambient = product(light_ambient, reflect_ambient);
+
+  //calculate normal
+  vec4 n = set(0,0,0,0);//need to change. based on vertex
+  vec4 l = vec_vec_sub(light_position, set(0,0,0,1)); //distance of distance light source
+  
+  //diffuse
+  GLfloat d = dot_product(n, normalize(l));
+  if(d > 0.0)//max(l . n, 0)
+    diffuse = scalar_vec_mul(d, product(light_diffuse, reflect_diffuse));
+
+  //specular
+  vec4 v = normalize(vec_vec_sub(eye, set(0,0,0,1)));//a vertex to eye point
+  vec4 half = normalize(vec_vec_add(l, v));//half vector. l+v
+  GLfloat s = dot_product(half, n);
+  if(s > 0.0)
+    specular = scalar_vec_mul(pow(s, shininess), product(light_specular, reflect_specular));  
+
+
+  //calculate a, d, s
+
   for(int i = num; i < num+36; i++){
       if(i >= num && i < num+6){//front
         c[i] = set(0,1,0,1);
@@ -795,36 +867,39 @@ float calculate_z(float x, float y){
 }
 
 void mouse(int button, int state, int x, int y){
-  //printf("button: %d\n", button);
-  float ratio = 1.02;
-  mat4 larger = sca_m(ratio,ratio,ratio);
-  mat4 smaller = sca_m(1.0/ratio,1.0/ratio,1.0/ratio);
-  if(button == 3){
-      ctm = mat_mat_mul(larger, ctm);
-    
-    
-  }else if(button == 4){
-    ctm = mat_mat_mul(smaller, ctm);
-  
-  }else if(button == GLUT_LEFT_BUTTON){
+  if(button == 3){//zoom in
+    printf("zoom in\n");
+
+    vec4 lookat = vec_vec_sub(eye, at);
+    r = vec_mag(lookat);
+    printf("%f\n", r);
+    lookat = normalize(lookat);
    
-     init_x = change_x(x);
-     init_y = change_y(y);
-     init_z = calculate_z(init_x, init_y);
-    
-     if(isnan(init_z)){
-       init_z = 0;
-       //return;
-     }
-    
-    /*
-    printf("click: %d %d\n", x, y);
-    printf("after change x: %f\n", init_x);
-    printf("after change y: %f\n", init_y);
-    printf("after change z: %f\n", init_z);
-    */
+    eye.x -= lookat.x/100;
+    eye.y -= lookat.y/100;
+    eye.z -= lookat.z/100;
+
+    model_view = look_at(eye, at, up);
   }
-  
+
+  if(button == 4){
+    printf("zoom out\n");
+
+    vec4 lookat = vec_vec_sub(eye, at);
+    r = vec_mag(lookat);
+    printf("%f\n", r);
+    lookat = normalize(lookat);
+    //printf("%f\n", lookat.x);
+    //printf("%f\n", lookat.y);
+    //printf("%f\n", lookat.z);
+
+    eye.x += lookat.x/100;
+    eye.y += lookat.y/100;
+    eye.z += lookat.z/100;
+
+    model_view = look_at(eye, at, up);
+  }
+
   glutPostRedisplay(); 
 
 }
@@ -909,13 +984,52 @@ void motion(int x, int y){
 
 }
 
+void specialkey(int key, int x, int y){
+  if(key == GLUT_KEY_UP){
+    printf("up\n");
+    //eye.y+=0.02;
+    if(eye.y <= r){//limit the extent of looking up
+      printf("%f\n", eye.y);
+      mat4 ro = rotate_x(-PI/180);
+      eye = mat_vec_mul(ro, eye);
+      model_view = look_at(eye, at, up);
+    }
+  }
+
+  if(key == GLUT_KEY_DOWN){
+      printf("down\n");
+      //eye.y-=0.02;
+    if(eye.y >= -r){
+      mat4 ro = rotate_x(PI/180);
+      eye = mat_vec_mul(ro, eye);
+      model_view = look_at(eye, at, up);
+    }
+  }
+
+  if(key == GLUT_KEY_LEFT){
+      printf("go left\n");
+      mat4 ro = rotate_y(-PI/180);
+      eye = mat_vec_mul(ro, eye);
+      model_view = look_at(eye, at, up);
+  }
+
+  if(key == GLUT_KEY_RIGHT){
+     printf("go right\n");
+      mat4 ro = rotate_y(PI/180);
+      eye = mat_vec_mul(ro, eye);
+      model_view = look_at(eye, at, up);
+  }
+
+}
+
+
 void keyboard(unsigned char key, int mousex, int mousey)
 {
     if(key == 'q'){
     	glutLeaveMainLoop();
     }
 
-    if(key == 'x'){
+    if(key == 'x'){//shuffle
       start_shuffle = 1;
       is_animate = 0;
       
@@ -957,6 +1071,12 @@ void keyboard(unsigned char key, int mousex, int mousey)
       turn_cube(4);
     }
 
+     
+
+    
+
+     
+
     glutPostRedisplay();
 }
 
@@ -968,9 +1088,9 @@ void reshape(int width, int height)
 }
 
 void idle(void){
-  //int times = (PI/2)/(change_angle);
-  int times = 64; //PI/2 / PI/128;
-  printf("%d\n", times);
+  //float times = (PI/2)/(change_angle);
+  //int times = 64; //PI/2 / PI/128;
+  //printf("%f\n", times);
   if(is_animate){
 
     if(current_state == LEFT){
@@ -980,7 +1100,7 @@ void idle(void){
         ctm_array[left[i]] = mat_mat_mul(rotate_x(change_angle), ctm_array[left[i]]);//set ctms
       }
 
-      if(current_angle >= times*change_angle){
+      if(current_angle >= PI/2){
         current_angle = 0;
         //current_state = NONE;
         is_animate = 0;
@@ -992,7 +1112,8 @@ void idle(void){
           ctm_array[right[i]] = mat_mat_mul(rotate_x(-change_angle), ctm_array[right[i]]);//set ctms
       }
 
-      if(current_angle >= times*change_angle){
+      printf("stop: %f\n", current_angle);
+      if(current_angle >= PI/2){
         printf("stop: %f\n", current_angle);
         current_angle = 0;
         //current_state = NONE;
@@ -1001,13 +1122,15 @@ void idle(void){
     
     }else if(current_state == FRONT){
       current_angle += change_angle;
+      printf("angle: %f\n", current_angle);
       //SET CTMs
       for(int i = 0; i < 9; i++){
         ctm_array[front[i]] = mat_mat_mul(rotate_z(-change_angle), ctm_array[front[i]]);
       }
 
-      if(current_angle >= times*change_angle){
-        //printf("angle: %f\n", current_angle);
+      if(current_angle >= PI/2){
+      //if(float_equal(current_angle, PI/2)){
+        printf("angle: %f\n", current_angle);
         current_angle = 0;
         //current_state = NONE;
         is_animate = 0;
@@ -1020,7 +1143,7 @@ void idle(void){
         ctm_array[back[i]] = mat_mat_mul(rotate_z(change_angle), ctm_array[back[i]]);
       }
 
-      if(current_angle >= times*change_angle){
+      if(current_angle >= PI/2){
         current_angle = 0;
         is_animate = 0;
         //current_state = NONE;
@@ -1033,7 +1156,7 @@ void idle(void){
         ctm_array[top[i]] = mat_mat_mul(rotate_y(-change_angle), ctm_array[top[i]]);
       }
 
-      if(current_angle >= times*change_angle){
+      if(current_angle >= PI/2){
         current_angle = 0;
         is_animate = 0;
         //current_state = NONE;
@@ -1046,7 +1169,7 @@ void idle(void){
         ctm_array[down[i]] = mat_mat_mul(rotate_y(change_angle), ctm_array[down[i]]);
       }
 
-      if(current_angle >= times*change_angle){
+      if(current_angle >= PI/2){
         current_angle = 0;
         is_animate = 0;
         //current_state = NONE;
@@ -1108,6 +1231,7 @@ int main(int argc, char **argv)
     glewInit();
     init();
     glutDisplayFunc(display);
+    glutSpecialFunc(specialkey);
     glutKeyboardFunc(keyboard);
     
     glutMouseFunc(mouse);//mouse
