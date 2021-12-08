@@ -19,10 +19,23 @@
 #define BUFFER_OFFSET( offset )   ((GLvoid*) (offset))
 
 #define PI 3.141592 
-
+//f:1 b:2 l:3 r:4 u:5 d:6 
+//matrices
 GLuint ctm_location;
 GLuint model_view_location;
 GLuint projection_location;
+
+//vectors
+GLuint ambient_product_location;
+GLuint diffuse_product_location;
+GLuint specular_product_location;
+GLuint light_position_location;
+
+//floats
+GLuint shine_location;
+GLuint a_cons_location;
+GLuint a_linear_location;
+GLuint a_quad_location;
 
 mat4 ctm;
 mat4* ctm_array;
@@ -30,24 +43,23 @@ mat4 model_view = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
 mat4 projection = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};;
 
 //light source
-vec4 light_ambient = {0,0,0,0};//L_ra
+vec4 light_ambient = {0,0,0,0};//L_ra//initialize
 vec4 light_diffuse = {0,0,0,0};
 vec4 light_specular = {0,0,0,0};
 //point source
-vec4 light_position = {1, 2, 3, 1};//point
+vec4 light_position = {1, 1, 1, 1};//point
 
 //material
 vec4 reflect_ambient = {0,0,0,0};//k_ra
 vec4 reflect_diffuse = {0,0,0,0};
 vec4 reflect_specular = {0,0,0,0};
 GLfloat shininess = 0;
-//material material = {};
 
 //distance-attenuation
 //1/(a+bd+cd^2)
-GLfloat attenuation_constant;
-GLfloat attenuation_linear;
-GLfloat attenuation_quadratic;
+GLfloat attenuation_constant = 0.0;
+GLfloat attenuation_linear = 0.0;
+GLfloat attenuation_quadratic = 0.0;
 
 
 //eye at up
@@ -83,10 +95,11 @@ float change_angle = PI/64;
 int step = 0;
 int max_step = 30;
 
-//vertices array
-vec4 *vertices;
-vec4 *colors;
-//
+
+vec4 *vertices;//vertices array
+vec4 *colors;//colors array
+vec4 *normals;//normals array
+
 int num_vertices;
 int one_cube_num = 36+96;//132
 
@@ -385,17 +398,15 @@ void set_cube_vertex(vec4 *v){
 }
 
 void set_cube_color(vec4 *c, int num){
+  /*
   vec4 ambient;
   vec4 diffuse = {0,0,0,1};
   vec4 specular = {0,0,0,1};
-  
   //calculate ambient
   ambient = product(light_ambient, reflect_ambient);
-
   //calculate normal
   vec4 n = set(0,0,0,0);//need to change. based on vertex
   vec4 l = vec_vec_sub(light_position, set(0,0,0,1)); //distance of distance light source
-  
   //diffuse
   GLfloat d = dot_product(n, normalize(l));
   if(d > 0.0)//max(l . n, 0)
@@ -407,9 +418,9 @@ void set_cube_color(vec4 *c, int num){
   GLfloat s = dot_product(half, n);
   if(s > 0.0)
     specular = scalar_vec_mul(pow(s, shininess), product(light_specular, reflect_specular));  
+  */
 
-
-  //calculate a, d, s
+  //SET Normals
 
   for(int i = num; i < num+36; i++){
       if(i >= num && i < num+6){//front
@@ -733,32 +744,29 @@ void turn_cube(int face){
       back[1] = down[1];
       back[2] = down[0];
   }
-}
+} 
 
-int* shuffle(){
-  //f:1 b:2 l:3 r:4 u:5 d:6
-  int formula[20] = {1, 6, 6, 2, 5, 3, 3, 3, 2, 2, 2, 6, 6, 1, 5, 5, 4, 4, 1, 1};
-  
-
-}
 
 void init(void)
 {   
   int input = 2;
   //initialize array
   if(input == 1){//sphere
+    /*
     num_vertices = 36*6*16 + 36*3*2;
     vertices = (vec4*)malloc(sizeof(vec4)*num_vertices);
     colors = (vec4*)malloc(sizeof(vec4)*num_vertices);
 
     set_sphere_vertex(vertices);
     set_sphere_color(colors);
+    */
   
   }else if(input ==2){
     //cube
     num_vertices = 27*one_cube_num;//cube ver_num
     vertices = (vec4*)malloc(sizeof(vec4)*num_vertices);
     colors = (vec4*)malloc(sizeof(vec4)*num_vertices);
+    normals = (vec4*)malloc(sizeof(vec4)*num_vertices);
     
     ctm_array = (mat4*)malloc(sizeof(mat4)*27);
     for(int i = 0; i < 27; i++){
@@ -826,11 +834,28 @@ void init(void)
     glEnableVertexAttribArray(vColor);
     glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4)*num_vertices));
 
+    //send normals array
+    GLuint vNormal = glGetAttribLocation(program, "vNormal");
+    glEnableVertexAttribArray(vNormal);
+    glVertexAttribPointer(vNormal, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4)*num_vertices));
+
+    //send matrix
     ctm_location = glGetUniformLocation(program, "ctm");//ctm
     ctm = identity();//identity matrix
-
     model_view_location = glGetUniformLocation(program, "model_view");
     projection_location = glGetUniformLocation(program, "projection");
+
+    //send vectors
+    ambient_product_location = glGetUniformLocation(program, "ambient_product");
+    diffuse_product_location = glGetUniformLocation(program, "diffuse_product");
+    specular_product_location = glGetUniformLocation(program, "specular_product");
+    light_position_location = glGetUniformLocation(program, "light_position");
+
+    //send floats
+    shine_location = glGetUniformLocation(program, "shininess");
+    a_cons_location = glGetUniformLocation(program, "attenuation_constant");
+    a_linear_location = glGetUniformLocation(program, "attenuation_linear");
+    a_quad_location = glGetUniformLocation(program, "attenuation_quadratic");
 
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
@@ -846,17 +871,30 @@ void display(void)
     glPolygonMode(GL_BACK, GL_LINE);
     //ctm
     //glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm);//send  matrices  into  the  graphic  pipeline 
+    
     //model view
     glUniformMatrix4fv(model_view_location, 1, GL_FALSE, (GLfloat *) &model_view);
     //projection
     glUniformMatrix4fv(projection_location, 1, GL_FALSE, (GLfloat *) &projection);
     
-    //CTM
+    //light parameters
+    glUniformMatrix4fv(ambient_product_location, 1, GL_FALSE, (GLfloat *) &light_ambient);
+    glUniformMatrix4fv(diffuse_product_location, 1, GL_FALSE, (GLfloat *) &light_diffuse);
+    glUniformMatrix4fv(specular_product_location, 1, GL_FALSE, (GLfloat *) &light_specular);
+    glUniformMatrix4fv(light_position_location, 1, GL_FALSE, (GLfloat *) &light_position);
+
+    //shiniess and attenuation
+    glUniformMatrix4fv(shine_location, 1, GL_FALSE, (GLfloat *) &shininess);
+    glUniformMatrix4fv(a_cons_location, 1, GL_FALSE, (GLfloat *) &attenuation_constant);
+    glUniformMatrix4fv(a_linear_location, 1, GL_FALSE, (GLfloat *) &attenuation_linear);
+    glUniformMatrix4fv(a_quad_location, 1, GL_FALSE, (GLfloat *) &attenuation_quadratic);
+
+
+    //CTMs
     for(int i = 0; i < 27; i++){
       glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm_array[i]);//send  matrices  into  the  graphic  pipeline 
       glDrawArrays(GL_TRIANGLES, i*one_cube_num, one_cube_num);
       //glDrawArrays(GL_TRIANGLES, one_cube_num, 2*one_cube_num);
-      
     }
 
     glutSwapBuffers();
@@ -1071,12 +1109,6 @@ void keyboard(unsigned char key, int mousex, int mousey)
       turn_cube(4);
     }
 
-     
-
-    
-
-     
-
     glutPostRedisplay();
 }
 
@@ -1242,6 +1274,7 @@ int main(int argc, char **argv)
 
     free(vertices);
     free(colors);
+    free(normals);
     
     return 0;
 }
