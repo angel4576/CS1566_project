@@ -37,35 +37,32 @@ GLuint a_cons_location;
 GLuint a_linear_location;
 GLuint a_quad_location;
 
+vec4 a_product = {0,0,0,1};//initialize
+vec4 d_product = {0,0,0,1};
+vec4 s_product = {0,0,0,1};
+
 mat4 ctm;
 mat4* ctm_array;
 mat4 model_view = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
-mat4 projection = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};;
+mat4 projection = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
 
-//light source
-vec4 light_ambient = {0,0,0,0};//L_ra//initialize
-vec4 light_diffuse = {0,0,0,0};
-vec4 light_specular = {0,0,0,0};
+
 //point source
-vec4 light_position = {1, 1, 1, 1};//point
+vec4 light_position = {0, 1, 0, 1};//point
 
-//material
-vec4 reflect_ambient = {0,0,0,0};//k_ra
-vec4 reflect_diffuse = {0,0,0,0};
-vec4 reflect_specular = {0,0,0,0};
-GLfloat shininess = 0;
+GLfloat shininess = 5;
 
 //distance-attenuation
 //1/(a+bd+cd^2)
-GLfloat attenuation_constant = 0.0;
-GLfloat attenuation_linear = 0.0;
+GLfloat attenuation_constant = 1.0;
+GLfloat attenuation_linear = 1.0;
 GLfloat attenuation_quadratic = 0.0;
 
 
 //eye at up
 //vec4 eye = {1, 0.8, 1, 1};//vrp. x = 1, z = 1
-vec4 eye = {0, 0, 1, 1};
-vec4 at = {0, 0, 0, 1};//set(0, 0, -100, 1);//origin
+vec4 eye = {2.5, 1.5, 2.5, 1};
+vec4 at = {0, 0, 0, 1};//origin
 vec4 up = {0, 1, 0, 0};//set(0, 1, 0, 0);//y-axis
 //number for each face of the cube
 int front[9] = {7, 4, 8, 1, 0, 2, 5, 3, 6};
@@ -121,6 +118,7 @@ GLfloat attenuation(GLfloat d){//d = magnitude(light_position - vertex_pos);
             + (attenuation_quadratic * d * d));
 }
 
+
 float calculate_vel(vec4 axis, vec4 lookat){
   //vec4 e_a = vec_vec_sub(eye, at);
   //vec4 axis = set(0,0,1,0);
@@ -150,6 +148,21 @@ vec4 set(float a, float b, float c, float d){
   return v;
 }
 
+void draw_ground(){
+  int g = 27*one_cube_num;
+  vertices[g] = set(-2,-1.5, 2, 1);
+  vertices[g+1] = set(2,-1.5, 2, 1);
+  vertices[g+2] = set(2,-1.5, -2, 1);
+  vertices[g+3] = vertices[g];
+  vertices[g+4] = vertices[g+2];
+  vertices[g+5] = set(-2,-1.5, -2, 1);
+  
+  //set color
+  for(int i = g; i < g+6; i++){
+    colors[i] = set(1,1,1,1);
+  }
+}
+
 mat4 turn_around_y(float size, int option){
   mat4 ry = rotate_y(PI);
   mat4 t;
@@ -163,6 +176,24 @@ mat4 turn_around_y(float size, int option){
 
 int triangle_i(int num){
   return (num*3 + 36);
+}
+
+void set_light_parameters(){
+  //light source
+  vec4 light_ambient = {0.3,0.3,0.3,1};//L_ra//initialize
+  vec4 light_diffuse = {0.3,0.3,0,1};
+  vec4 light_specular = {0.3,0.3,0,1};
+
+  //reflect
+  vec4 reflect_ambient = {1,1,1,1};//k_ra
+  vec4 reflect_diffuse = {0,0.1,0,1};
+  vec4 reflect_specular = {0,0.1,0,1};
+
+  a_product = product(reflect_ambient, light_ambient);
+  //a_product = set(0.3, 0.3, 0.3, 1);
+  d_product = product(reflect_diffuse, light_diffuse);
+  s_product = product(reflect_specular, light_specular);
+
 }
 
 void build_edge(vec4 *v){
@@ -420,8 +451,6 @@ void set_cube_color(vec4 *c, int num){
     specular = scalar_vec_mul(pow(s, shininess), product(light_specular, reflect_specular));  
   */
 
-  //SET Normals
-
   for(int i = num; i < num+36; i++){
       if(i >= num && i < num+6){//front
         c[i] = set(0,1,0,1);
@@ -441,6 +470,27 @@ void set_cube_color(vec4 *c, int num){
    for(int i = num+36; i < num+one_cube_num; i++){
       c[i] = set(0,0,0,1);
     }
+}
+
+void set_cube_normal(vec4 *n){
+  for(int i = 0; i < num_vertices; i+=3){
+    //triangle
+    vec4 p0 = vertices[i];
+    vec4 p1 = vertices[i+1];
+    vec4 p2 = vertices[i+2];
+    
+    //calculate normal
+    vec4 u = vec_vec_sub(p1, p0);
+    vec4 v = vec_vec_sub(p2, p1);
+
+    vec4 normal = cross_product(u, v);
+    normal = normalize(normal);
+
+    n[i] = normal;
+    n[i+1] = normal;
+    n[i+2] = normal;
+
+  }
 }
 
 void translate_cube(){
@@ -764,6 +814,7 @@ void init(void)
   }else if(input ==2){
     //cube
     num_vertices = 27*one_cube_num;//cube ver_num
+    num_vertices += 6;
     vertices = (vec4*)malloc(sizeof(vec4)*num_vertices);
     colors = (vec4*)malloc(sizeof(vec4)*num_vertices);
     normals = (vec4*)malloc(sizeof(vec4)*num_vertices);
@@ -788,25 +839,37 @@ void init(void)
     for(int i = 0; i < 27; i++){
       set_cube_color(colors, i*one_cube_num);//pass the start vertex of each cube
     }
-    
-    //
+
+    draw_ground();
+
+    set_cube_normal(normals);
+    /*
+    for (int i = 0; i < num_vertices; i++)
+    {
+      printf("%d ", i);
+      print_vec(normals[i]);
+    }
+    */
+    set_light_parameters();
     
 
+    //
     //print color for debug
-    /*
+    
     for(int i = 0; i < num_vertices; i++){
       printf("%d ", i);
       print_vec(colors[i]);
     }
-    */
+    
     //printf("edge length: %f\n", edge_length);
     
     //print vertices array
+    /*
     for(int i = 0; i < num_vertices; i++){
       printf("%d ", i);
       print_vec(vertices[i]);
     }
-    
+    */
   }
    
   
@@ -822,9 +885,10 @@ void init(void)
     GLuint buffer;
     glGenBuffers(1, &buffer);
     glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vec4)*num_vertices+ sizeof(vec4)*num_vertices, NULL, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, 3*sizeof(vec4)*num_vertices, NULL, GL_STATIC_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec4)*num_vertices, vertices);
     glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4)*num_vertices, sizeof(vec4)*num_vertices, colors);
+    glBufferSubData(GL_ARRAY_BUFFER, 2*sizeof(vec4)*num_vertices, sizeof(vec4)*num_vertices, normals);
 
     GLuint vPosition = glGetAttribLocation(program, "vPosition");
     glEnableVertexAttribArray(vPosition);
@@ -837,7 +901,7 @@ void init(void)
     //send normals array
     GLuint vNormal = glGetAttribLocation(program, "vNormal");
     glEnableVertexAttribArray(vNormal);
-    glVertexAttribPointer(vNormal, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4)*num_vertices));
+    glVertexAttribPointer(vNormal, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (2*sizeof(vec4)*num_vertices));
 
     //send matrix
     ctm_location = glGetUniformLocation(program, "ctm");//ctm
@@ -878,16 +942,16 @@ void display(void)
     glUniformMatrix4fv(projection_location, 1, GL_FALSE, (GLfloat *) &projection);
     
     //light parameters
-    glUniformMatrix4fv(ambient_product_location, 1, GL_FALSE, (GLfloat *) &light_ambient);
-    glUniformMatrix4fv(diffuse_product_location, 1, GL_FALSE, (GLfloat *) &light_diffuse);
-    glUniformMatrix4fv(specular_product_location, 1, GL_FALSE, (GLfloat *) &light_specular);
-    glUniformMatrix4fv(light_position_location, 1, GL_FALSE, (GLfloat *) &light_position);
+    glUniform4fv(ambient_product_location, 1, (GLfloat *) &a_product);
+    glUniform4fv(diffuse_product_location, 1, (GLfloat *) &d_product);
+    glUniform4fv(specular_product_location, 1, (GLfloat *) &s_product);
+    glUniform4fv(light_position_location, 1, (GLfloat *) &light_position);
 
     //shiniess and attenuation
-    glUniformMatrix4fv(shine_location, 1, GL_FALSE, (GLfloat *) &shininess);
-    glUniformMatrix4fv(a_cons_location, 1, GL_FALSE, (GLfloat *) &attenuation_constant);
-    glUniformMatrix4fv(a_linear_location, 1, GL_FALSE, (GLfloat *) &attenuation_linear);
-    glUniformMatrix4fv(a_quad_location, 1, GL_FALSE, (GLfloat *) &attenuation_quadratic);
+    glUniform1fv(shine_location, 1, (GLfloat *) &shininess);
+    glUniform1fv(a_cons_location, 1, (GLfloat *) &attenuation_constant);
+    glUniform1fv(a_linear_location, 1, (GLfloat *) &attenuation_linear);
+    glUniform1fv(a_quad_location, 1, (GLfloat *) &attenuation_quadratic);
 
 
     //CTMs
@@ -896,6 +960,9 @@ void display(void)
       glDrawArrays(GL_TRIANGLES, i*one_cube_num, one_cube_num);
       //glDrawArrays(GL_TRIANGLES, one_cube_num, 2*one_cube_num);
     }
+
+    glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm);
+    glDrawArrays(GL_TRIANGLES, 27*one_cube_num, 6);
 
     glutSwapBuffers();
 }
@@ -1025,35 +1092,37 @@ void motion(int x, int y){
 void specialkey(int key, int x, int y){
   if(key == GLUT_KEY_UP){
     printf("up\n");
-    //eye.y+=0.02;
+  
     if(eye.y <= r){//limit the extent of looking up
       printf("%f\n", eye.y);
+      eye.y+=0.05;
       mat4 ro = rotate_x(-PI/180);
-      eye = mat_vec_mul(ro, eye);
+      //eye = mat_vec_mul(ro, eye);
       model_view = look_at(eye, at, up);
     }
   }
 
   if(key == GLUT_KEY_DOWN){
       printf("down\n");
-      //eye.y-=0.02;
     if(eye.y >= -r){
+      printf("%f\n", eye.y);
+      eye.y-=0.05;
       mat4 ro = rotate_x(PI/180);
-      eye = mat_vec_mul(ro, eye);
+      //eye = mat_vec_mul(ro, eye);
       model_view = look_at(eye, at, up);
     }
   }
 
   if(key == GLUT_KEY_LEFT){
       printf("go left\n");
-      mat4 ro = rotate_y(-PI/180);
+      mat4 ro = rotate_y(-PI/90);
       eye = mat_vec_mul(ro, eye);
       model_view = look_at(eye, at, up);
   }
 
   if(key == GLUT_KEY_RIGHT){
      printf("go right\n");
-      mat4 ro = rotate_y(PI/180);
+      mat4 ro = rotate_y(PI/90);
       eye = mat_vec_mul(ro, eye);
       model_view = look_at(eye, at, up);
   }
