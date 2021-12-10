@@ -19,35 +19,47 @@ uniform float shininess, attenuation_constant, attenuation_linear, attenuation_q
 
 void main()
 {
-	//ambient =  ambient_product;
-	ambient = vColor*0.4;
 
-	vec4 N = normalize(model_view * ctm * vNormal);//normal
-	vec4 L_temp = model_view * (light_position - ctm * vPosition);
-	vec4 L = normalize(L_temp);
-	//diffuse
-	//diffuse = max(dot(L, N), 0.0) * diffuse_product;
-	diffuse = max(dot(L, N), 0.0) * vColor;
-	vec4 eye_position = vec4(0.0, 0.0, 0.0, 1.0);
+	if(is_shadow == 0){
+		//position
+		gl_Position = projection * model_view * ctm * vPosition;
 
-	vec4 V = normalize(eye_position - (model_view * ctm * vPosition));
-	vec4 H = normalize(L + V);//half vector
-	//specular 
-	//specular = pow(max(dot(N, H), 0.0), shininess) * specular_product;
-	specular = pow(max(dot(N, H), 0.0), shininess) * vec4(1,1,1,1);
-	//attenuation
-	float distance = length(L_temp);
-	float attenuation = 1/(attenuation_constant + (attenuation_linear * distance) 
-            + (attenuation_quadratic * distance * distance));
+		//ambient =  ambient_product;
+		ambient = vColor*0.4;
+
+		vec4 N = normalize(model_view * ctm * vNormal);//normal
+		vec4 L_temp = model_view * (light_position - ctm * vPosition);
+		vec4 L = normalize(L_temp);
+		//diffuse
+		//diffuse = max(dot(L, N), 0.0) * diffuse_product;
+		diffuse = max(dot(L, N), 0.0) * vColor;
+		vec4 eye_position = vec4(0.0, 0.0, 0.0, 1.0);
+
+		vec4 V = normalize(eye_position - (model_view * ctm * vPosition));
+		vec4 H = normalize(L + V);//half vector
+		//specular 
+		//specular = pow(max(dot(N, H), 0.0), shininess) * specular_product;
+		specular = pow(max(dot(N, H), 0.0), shininess) * vec4(1,1,1,1);
+		//attenuation
+		float distance = length(L_temp);
+		float attenuation = 1/(attenuation_constant + (attenuation_linear * distance) 
+				+ (attenuation_quadratic * distance * distance));
+		
+		//color be sent to frag shader
+		color = ambient + (attenuation * (diffuse + specular));//be sent to frag shader
+		//color = vColor;
+
+	}else{
+		vec4 c_position = ctm * vPosition;
+		float x = light_position.x - ((light_position.y-(-1.4))*(light_position.x-c_position.x)/(light_position.y-c_position.y));
+		float z = light_position.z - ((light_position.y-(-1.4))*(light_position.z-c_position.z)/(light_position.y-c_position.y));
+		gl_Position = projection * model_view  * vec4(x,-1.4,z,1);
+		color = vec4(0,0,0,1);
+	}
+
 	
-	//color be sent to frag shader
-	color = ambient + (attenuation * (diffuse + specular));//be sent to frag shader
-	//color = vColor;
-	//color = ambient;
 
 	//position
-	gl_Position = projection * model_view * ctm * vPosition;
-	
-
+	//gl_Position = projection * model_view * ctm * vPosition;
 	
 }

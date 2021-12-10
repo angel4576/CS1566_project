@@ -19,6 +19,8 @@
 #define BUFFER_OFFSET( offset )   ((GLvoid*) (offset))
 
 #define PI 3.141592 
+
+GLuint program;
 //f:1 b:2 l:3 r:4 u:5 d:6 
 //matrices
 GLuint ctm_location;
@@ -46,9 +48,8 @@ mat4* ctm_array;
 mat4 model_view = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
 mat4 projection = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
 
-
 //point source
-vec4 light_position = {0, 1, 0, 1};//point
+vec4 light_position = {0, 5, 0, 1};//point
 
 GLfloat shininess = 5;
 
@@ -92,6 +93,7 @@ float change_angle = PI/64;
 int step = 0;
 int max_step = 30;
 
+int is_shadow = 0;
 
 vec4 *vertices;//vertices array
 vec4 *colors;//colors array
@@ -128,16 +130,6 @@ float calculate_vel(vec4 axis, vec4 lookat){
   return co;
 }
 
-int float_equal(float a, float b){
-  int temp_a=(int)(a *10000);
-  int temp_b=(int)(b *10000);
-  
-  if(temp_a >= temp_b)
-    return 1;
-
-  return 0;
-}
-
 mat4 identity(){
   mat4 i = {{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
   return i;
@@ -148,14 +140,34 @@ vec4 set(float a, float b, float c, float d){
   return v;
 }
 
+void draw_shadow(){
+  //calculate shadow vertice
+  int s = 27*one_cube_num + 6;
+  float sh_x;
+  float sh_z;
+  //xs= xl−(yl−ys)(xl-x)/(yl-y)
+  for(int i = s; i < s+27*one_cube_num; i++){//shadow vertices
+    sh_x = light_position.x - (light_position.y - (-1.5))
+            * (light_position.x - vertices[i-s].x)/(light_position.y - vertices[i-s].y);
+    
+    sh_z = light_position.z - (light_position.y - (-1.5))
+            * (light_position.z - vertices[i-s].z)/(light_position.y - vertices[i-s].y);
+    
+    vertices[i] = set(sh_x, -1.5, sh_z, 1);
+
+    colors[i] = set(0,0,0,1);
+
+  }
+}
+
 void draw_ground(){
   int g = 27*one_cube_num;
-  vertices[g] = set(-2,-1.5, 2, 1);
-  vertices[g+1] = set(2,-1.5, 2, 1);
-  vertices[g+2] = set(2,-1.5, -2, 1);
+  vertices[g] = set(-4,-1.5, 4, 1);
+  vertices[g+1] = set(4,-1.5, 4, 1);
+  vertices[g+2] = set(4,-1.5, -4, 1);
   vertices[g+3] = vertices[g];
   vertices[g+4] = vertices[g+2];
-  vertices[g+5] = set(-2,-1.5, -2, 1);
+  vertices[g+5] = set(-4,-1.5, -4, 1);
   
   //set color
   for(int i = g; i < g+6; i++){
@@ -177,6 +189,7 @@ mat4 turn_around_y(float size, int option){
 int triangle_i(int num){
   return (num*3 + 36);
 }
+
 
 void set_light_parameters(){
   //light source
@@ -814,7 +827,8 @@ void init(void)
   }else if(input ==2){
     //cube
     num_vertices = 27*one_cube_num;//cube ver_num
-    num_vertices += 6;
+    num_vertices += 6;// + 27*one_cube_num; 
+
     vertices = (vec4*)malloc(sizeof(vec4)*num_vertices);
     colors = (vec4*)malloc(sizeof(vec4)*num_vertices);
     normals = (vec4*)malloc(sizeof(vec4)*num_vertices);
@@ -841,6 +855,7 @@ void init(void)
     }
 
     draw_ground();
+    //draw_shadow();
 
     set_cube_normal(normals);
     /*
@@ -852,30 +867,25 @@ void init(void)
     */
     set_light_parameters();
     
-
-    //
     //print color for debug
-    
+    /*
     for(int i = 0; i < num_vertices; i++){
       printf("%d ", i);
       print_vec(colors[i]);
     }
-    
+    */
+
     //printf("edge length: %f\n", edge_length);
-    
     //print vertices array
-    /*
+    
     for(int i = 0; i < num_vertices; i++){
       printf("%d ", i);
       print_vec(vertices[i]);
     }
-    */
-  }
-   
-  
-  
     
-    GLuint program = initShader("vshader.glsl", "fshader.glsl");
+  }
+  
+    program = initShader("vshader.glsl", "fshader.glsl");
     glUseProgram(program);
 
     GLuint vao;
@@ -955,15 +965,31 @@ void display(void)
 
 
     //CTMs
+    glUniform1i(glGetUniformLocation(program, "is_shadow"), 0);
+    for(int i = 0; i < 27; i++){
+      //cube
+      glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm_array[i]);//send  matrices  into  the  graphic  pipeline 
+      
+      glUniform1i(glGetUniformLocation(program, "is_shadow"), 0);
+      glDrawArrays(GL_TRIANGLES, i*one_cube_num, one_cube_num);
+      //draw shadow
+      glUniform1i(glGetUniformLocation(program, "is_shadow"), 1);
+      glDrawArrays(GL_TRIANGLES, i*one_cube_num, one_cube_num);
+
+    }
+    //draw ground
+    glUniform1i(glGetUniformLocation(program, "is_shadow"), 0);
+    glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm);
+    glDrawArrays(GL_TRIANGLES, 27*one_cube_num, 6);
+    
+    //shadow
+    /*
+    glUniform1i(glGetUniformLocation(program, "is_shadow"), 1);
     for(int i = 0; i < 27; i++){
       glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm_array[i]);//send  matrices  into  the  graphic  pipeline 
       glDrawArrays(GL_TRIANGLES, i*one_cube_num, one_cube_num);
-      //glDrawArrays(GL_TRIANGLES, one_cube_num, 2*one_cube_num);
     }
-
-    glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm);
-    glDrawArrays(GL_TRIANGLES, 27*one_cube_num, 6);
-
+    */
     glutSwapBuffers();
 }
 
@@ -1136,10 +1162,9 @@ void keyboard(unsigned char key, int mousex, int mousey)
     	glutLeaveMainLoop();
     }
 
-    if(key == 'x'){//shuffle
+    if(key == 's'){//shuffle
       start_shuffle = 1;
       is_animate = 0;
-      
     }
 
     if(key == 'f'){//front
@@ -1176,6 +1201,30 @@ void keyboard(unsigned char key, int mousex, int mousey)
 
     if(key == 'r'){
       turn_cube(4);
+    }
+
+    if(key == 'x'){
+      light_position.x+=0.1;
+    }
+
+    if(key == 'X'){
+      light_position.x-=0.1;
+    }
+
+    if(key == 'y'){
+      light_position.y+=0.1;
+    }
+
+    if(key == 'Y'){
+      light_position.y-=0.1;
+    }
+
+    if(key == 'z'){
+      light_position.z+=0.1;
+    }
+
+     if(key == 'Z'){
+      light_position.z-=0.1;
     }
 
     glutPostRedisplay();
