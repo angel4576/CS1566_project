@@ -22,6 +22,8 @@
 
 GLuint program;
 //f:1 b:2 l:3 r:4 u:5 d:6 
+//f':7 b':8 l':9 r':10 u':11 d':12
+
 //matrices
 GLuint ctm_location;
 GLuint model_view_location;
@@ -44,12 +46,13 @@ vec4 d_product = {0,0,0,1};
 vec4 s_product = {0,0,0,1};
 
 mat4 ctm;
+mat4 light_ctm = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
 mat4* ctm_array;
 mat4 model_view = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
 mat4 projection = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
 
 //point source
-vec4 light_position = {0, 5, 0, 1};//point
+vec4 light_position = {0, 4, 0, 1};//point
 
 GLfloat shininess = 5;
 
@@ -81,6 +84,12 @@ typedef enum{
   RIGHT,
   TOP,
   DOWN,
+  FRONT_P,
+  BACK_P,
+  LEFT_P,
+  RIGHT_P,
+  TOP_P,
+  DOWN_P,
 
 }state;
 
@@ -90,6 +99,9 @@ state current_state = NONE;
 float current_angle = 0;
 float change_angle = PI/64;
 
+int formula[30] = {1, 6, 6, 3, 3, 2, 6, 2, 2, 2, 1, 1,
+                         5, 5, 5, 1, 5, 1, 1, 5, 5, 1, 
+                         1, 1, 3, 6, 1, 1, 1, 5};;//a pattern formula
 int step = 0;
 int max_step = 30;
 
@@ -101,6 +113,7 @@ vec4 *normals;//normals array
 
 int num_vertices;
 int one_cube_num = 36+96;//132
+int one_sphere_num = 36*6*16 + 36*3*2;
 
 float size = 0.5/2;
 float length = 0.55/2;
@@ -486,7 +499,7 @@ void set_cube_color(vec4 *c, int num){
 }
 
 void set_cube_normal(vec4 *n){
-  for(int i = 0; i < num_vertices; i+=3){
+  for(int i = 0; i < 27*one_cube_num+6; i+=3){
     //triangle
     vec4 p0 = vertices[i];
     vec4 p1 = vertices[i+1];
@@ -504,6 +517,11 @@ void set_cube_normal(vec4 *n){
     n[i+2] = normal;
 
   }
+
+  for(int i = 27*one_cube_num+6; i < num_vertices; i++){
+    n[i] = set(0,0,0,0);
+  }
+
 }
 
 void translate_cube(){
@@ -515,20 +533,20 @@ void translate_cube(){
   }
 }
 
-void set_sphere_vertex(vec4 *v){    
+void set_sphere_vertex(vec4 *v, int start){    
     int j = 0;
-    int i = 0;
+    int i = start;//0;
     int count = 36*6;
     
-    v[0] = set(r,0,0,1);//on the x axis
-    vec4 temp = v[0];
+    v[start] = set(1,0,0,1);//on the x axis
+    vec4 temp = v[start];
     
     
     //upper half of the sphere
     while(j < 8){
     
       vec4 up = mat_vec_mul(rotate_z(PI/18), temp);//3rd
-      for(; i < count; i+=6){
+      for(; i < start+count; i+=6){//one band
         v[i] = temp;
         v[i+1] = mat_vec_mul(rotate_y(PI/18), temp);//2nd
         v[i+2] = up;//3rd
@@ -549,10 +567,10 @@ void set_sphere_vertex(vec4 *v){
     }
     
     vec4 top_st = v[i-1];
-    for(; i < num_vertices/2; i+= 3){
+    for(; i < start+one_sphere_num/2; i+=3){
       v[i] = top_st;
       v[i+1] = mat_vec_mul(rotate_y((PI/18)), v[i]);
-      v[i+2] = set(0,r,0,1);//tip
+      v[i+2] = set(0,1,0,1);//tip
       
       top_st = v[i+1];
     }
@@ -560,13 +578,13 @@ void set_sphere_vertex(vec4 *v){
     count+= 36*3;
     
     //lower part 
-    vec4 temp_2 = set(r,0,0,1);
+    vec4 temp_2 = set(1,0,0,1);
     
     int j_2 = 0;
     while(j_2 < 8){
     
       vec4 down = mat_vec_mul(rotate_z(-PI/18), temp_2);//3rd
-      for(; i < count; i+=6){
+      for(; i < start+count; i+=6){
         v[i] = temp_2;
         v[i+1] = mat_vec_mul(rotate_y(-PI/18), temp_2);//2nd
         v[i+2] = down;//3rd
@@ -588,24 +606,29 @@ void set_sphere_vertex(vec4 *v){
     }
     
     vec4 bottom_st = v[i-1];
-    for(; i < num_vertices; i+= 3){
+    for(; i < start+one_sphere_num; i+= 3){
       v[i] = bottom_st;
       v[i+1] = mat_vec_mul(rotate_y((-PI/18)), v[i]);
-      v[i+2] = set(0,-r,0,1);//tip
+      v[i+2] = set(0,-1,0,1);//tip
       
       bottom_st = v[i+1];
     }
     
 }
 
-void set_sphere_color(vec4 *c){
-    float ran_x;
-    float ran_y;// = (float)rand()/ (float)RAND_MAX;
-    float ran_z; //= (float)rand()/ (float)RAND_MAX;
+void set_sphere_color(vec4 *c, int start){
+    //float ran_x;
+    //float ran_y;// = (float)rand()/ (float)RAND_MAX;
+    //float ran_z; //= (float)rand()/ (float)RAND_MAX;
     
+    for(int i = start; i < start + one_sphere_num; i++){
+      c[i] = set(1,1,1,1);
+    }
+
+    //random color
     //printf("%f", ran);
-    
-    for(int i = 0; i < num_vertices; i+=3){
+    /*
+    for(int i = start; i < start + one_sphere_num; i+=3){
       ran_x = (float)rand()/ (float)RAND_MAX;
       ran_y = (float)rand()/ (float)RAND_MAX;
       ran_z = (float)rand()/ (float)RAND_MAX;
@@ -614,9 +637,16 @@ void set_sphere_color(vec4 *c){
       c[i] = set(ran_x,ran_y,ran_z,1);
       c[i+1] = set(ran_x,ran_y,ran_z,1);
       c[i+2] = set(ran_x,ran_y,ran_z,1);
-    
     }
-    
+    */
+}
+
+void translate_sphere(int start){
+  mat4 trans = trans_m(light_position.x, light_position.y, light_position.z);
+  trans = mat_mat_mul(trans, sca_m(0.2, 0.2, 0.2));
+  for(int i = start; i < start+one_sphere_num; i++){
+    vertices[i] = mat_vec_mul(trans, vertices[i]);
+  }
 }
 
 GLfloat change_x(int x){
@@ -657,15 +687,29 @@ GLfloat change_y(int y){
 
 }
 
+void set_random_formula(){
+  for(int i = 0; i < 30; i++){
+    formula[i] = rand()%13;
+  }
+}
+
 void turn_cube(int face){
   is_animate = 1;
-  if(face == 1){//front
-    current_state = FRONT;
-        int temp[9] = {right[0], right[3], right[6], down[7], 0, top[1], left[2], left[5], left[8]};
-        for(int i = 0; i < 9; i++){
-          front[i] = temp[i];
-        }
+  if(face == 1 || face == 7){//front
+    if(face == 1){
+      current_state = FRONT;
+      int temp[9] = {right[0], right[3], right[6], down[7], 0, top[1], left[2], left[5], left[8]};
+      for(int i = 0; i < 9; i++){
+        front[i] = temp[i];
+      }
 
+    }else{//counter clockwise
+      current_state = FRONT_P;
+      int temp[9] = {left[8], left[5], left[2], top[1], 0, down[7], right[6], right[3], right[0]};
+      for(int i = 0; i < 9; i++){
+        front[i] = temp[i];
+      }
+    }
       //modify top
       top[0] = front[6];
       top[1] = front[7];
@@ -683,12 +727,21 @@ void turn_cube(int face){
       down[7] = front[1];
       down[8] = front[2];
 
-  }else if(face == 2){//back
-    current_state = BACK;
+  }else if(face == 2 || face == 8){//back
+
+    if(face == 2){
+      current_state = BACK;
       int temp[9] = {left[0], left[3], left[6], down[1], 18, top[7], right[2], right[5], right[8]};
       for(int i = 0; i < 9; i++){
         back[i] = temp[i];
       }
+    }else{
+      current_state = BACK_P;
+      int temp[9] = {right[8], right[5], right[2], top[7], 18, down[1], left[6], left[3], left[0]};
+      for(int i = 0; i < 9; i++){
+        back[i] = temp[i];
+      }
+    }
 
       //modify top
       top[6] = back[8];
@@ -707,13 +760,21 @@ void turn_cube(int face){
       down[1] = back[1];
       down[2] = back[0];
 
-  }else if(face == 3){//left
-    current_state = LEFT;
+  }else if(face == 3 || face == 9){//left
 
+    if(face == 3){
+      current_state = LEFT;
       int temp[9] = {front[0], front[3], front[6], down[3], 10, top[3], back[2], back[5], back[8]};
       for(int i = 0; i < 9; i++){
         left[i] = temp[i];
       }
+    }else{
+      current_state = LEFT_P;
+      int temp[9] = {back[8], back[5], back[2], top[3], 10, down[3], front[6], front[3], front[0]};
+      for(int i = 0; i < 9; i++){
+        left[i] = temp[i];
+      }
+    } 
 
       //modify front
       front[0] = left[2];
@@ -732,16 +793,22 @@ void turn_cube(int face){
       back[5] = left[3];
       back[8] = left[6];
       
-  }else if(face == 4){//right
-    current_state = RIGHT;
-      //for(int i = 0; i < 9; i++){
-        //ctm_array[right[i]] = mat_mat_mul(rotate_x(-PI/2), ctm_array[right[i]]);//set ctms
-      //}
+  }else if(face == 4 || face == 10){//right
+
+    if(face == 4){
+      current_state = RIGHT;
       int temp[9] = {back[0], back[3], back[6], down[5], 11, top[5], front[2], front[5], front[8]};
       for(int i = 0; i < 9; i++){
         right[i] = temp[i];
       }
 
+    }else{
+      current_state = RIGHT_P;
+      int temp[9] = {front[8], front[5], front[2], top[5], 11, down[5], back[6], back[3], back[0]};
+      for(int i = 0; i < 9; i++){
+        right[i] = temp[i];
+      }
+    }
       //modify front
       front[2] = right[0];
       front[5] = right[3];
@@ -759,13 +826,20 @@ void turn_cube(int face){
       back[3] = right[5];
       back[6] = right[8];
       
-  }else if(face == 5){//top
-    current_state = TOP;
+  }else if(face == 5 || face == 11){//top
+    if(face == 5){
+      current_state = TOP;
       int temp[9] = {right[6], right[7], right[8], front[7], 12, back[7], left[8], left[7], left[6]};
       for(int i = 0; i < 9; i++){
         top[i] = temp[i];
       }
-      
+    }else{
+      current_state = TOP_P;
+      int temp[9] = {left[6], left[7], left[8], back[7], 12, front[7], right[8], right[7], right[6]};
+      for(int i = 0; i < 9; i++){
+        top[i] = temp[i];
+      }
+    }
       //modify front
       front[6] = top[0];
       front[7] = top[1];
@@ -783,13 +857,20 @@ void turn_cube(int face){
       back[7] = top[7];
       back[8] = top[6];
 
-  }else if(face == 6){//down
-    current_state = DOWN;
+  }else if(face == 6 || face == 12){//down
+    if(face == 6){
+      current_state = DOWN;
       int temp[9] = {right[2], right[1], right[0], back[1], 13, front[1], left[0], left[1], left[2]};
       for(int i = 0; i < 9; i++){
         down[i] = temp[i];
       }
-      
+    }else{
+      current_state = DOWN_P;
+      int temp[9] = {left[2], left[1], left[0], front[1], 13, back[1], right[0], right[1], right[2]};
+      for(int i = 0; i < 9; i++){
+        down[i] = temp[i];
+      }
+    }
       //modify front
       front[0] = down[6];
       front[1] = down[7];
@@ -806,28 +887,17 @@ void turn_cube(int face){
       back[0] = down[2];
       back[1] = down[1];
       back[2] = down[0];
+  
   }
 } 
 
 
 void init(void)
 {   
-  int input = 2;
-  //initialize array
-  if(input == 1){//sphere
-    /*
-    num_vertices = 36*6*16 + 36*3*2;
-    vertices = (vec4*)malloc(sizeof(vec4)*num_vertices);
-    colors = (vec4*)malloc(sizeof(vec4)*num_vertices);
-
-    set_sphere_vertex(vertices);
-    set_sphere_color(colors);
-    */
-  
-  }else if(input ==2){
     //cube
-    num_vertices = 27*one_cube_num;//cube ver_num
-    num_vertices += 6;// + 27*one_cube_num; 
+    num_vertices = 27*one_cube_num;//magic cube ver_num
+    num_vertices += 6;//ground
+    num_vertices += one_sphere_num;//num of vertices of sphere
 
     vertices = (vec4*)malloc(sizeof(vec4)*num_vertices);
     colors = (vec4*)malloc(sizeof(vec4)*num_vertices);
@@ -841,31 +911,43 @@ void init(void)
     //set model view
     model_view = look_at(eye, at, up);
     //set frustrum
-    projection = frustum(-0.25, 0.25, -0.30, 0.2, -0.5, -10);//left, right, bottom, top, near, far
-    //set one cube vertex
-    set_cube_vertex(vertices);
-    translate_cube();
+    projection = frustum(-0.25, 0.25, -0.30, 0.2, -0.5, -20);//left, right, bottom, top, near, far
+    
+    //set radius of viewing sphere
+    vec4 lookat = vec_vec_sub(eye, at);
+    r = vec_mag(lookat);
 
+    //generate random shuffle formula
+    set_random_formula();
+
+    //build magic cube
+    set_cube_vertex(vertices);//set one cube vertex
+    translate_cube();
     build_first_layer();
     build_two_layers();
-
     //set all cubes colors
     for(int i = 0; i < 27; i++){
       set_cube_color(colors, i*one_cube_num);//pass the start vertex of each cube
     }
 
     draw_ground();
-    //draw_shadow();
+    
+    set_sphere_vertex(vertices, 27*one_cube_num + 6);
+    set_sphere_color(colors, 27*one_cube_num + 6);
+    translate_sphere(27*one_cube_num + 6);//translate to light position
 
+
+    //set normal array
     set_cube_normal(normals);
+    
     /*
+    //print normals
     for (int i = 0; i < num_vertices; i++)
     {
       printf("%d ", i);
       print_vec(normals[i]);
     }
     */
-    set_light_parameters();
     
     //print color for debug
     /*
@@ -877,13 +959,13 @@ void init(void)
 
     //printf("edge length: %f\n", edge_length);
     //print vertices array
-    
+    /*
     for(int i = 0; i < num_vertices; i++){
       printf("%d ", i);
       print_vec(vertices[i]);
     }
-    
-  }
+    */
+  
   
     program = initShader("vshader.glsl", "fshader.glsl");
     glUseProgram(program);
@@ -981,6 +1063,10 @@ void display(void)
     glUniform1i(glGetUniformLocation(program, "is_shadow"), 0);
     glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &ctm);
     glDrawArrays(GL_TRIANGLES, 27*one_cube_num, 6);
+
+    //draw sphere
+    glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &light_ctm);
+    glDrawArrays(GL_TRIANGLES, 27*one_cube_num + 6, one_sphere_num);
     
     //shadow
     /*
@@ -1006,9 +1092,9 @@ void mouse(int button, int state, int x, int y){
     printf("%f\n", r);
     lookat = normalize(lookat);
    
-    eye.x -= lookat.x/100;
-    eye.y -= lookat.y/100;
-    eye.z -= lookat.z/100;
+    eye.x -= lookat.x/50;
+    eye.y -= lookat.y/50;
+    eye.z -= lookat.z/50;
 
     model_view = look_at(eye, at, up);
   }
@@ -1024,9 +1110,9 @@ void mouse(int button, int state, int x, int y){
     //printf("%f\n", lookat.y);
     //printf("%f\n", lookat.z);
 
-    eye.x += lookat.x/100;
-    eye.y += lookat.y/100;
-    eye.z += lookat.z/100;
+    eye.x += lookat.x/50;
+    eye.y += lookat.y/50;
+    eye.z += lookat.z/50;
 
     model_view = look_at(eye, at, up);
   }
@@ -1121,9 +1207,7 @@ void specialkey(int key, int x, int y){
   
     if(eye.y <= r){//limit the extent of looking up
       printf("%f\n", eye.y);
-      eye.y+=0.05;
-      mat4 ro = rotate_x(-PI/180);
-      //eye = mat_vec_mul(ro, eye);
+      eye.y+=0.09;
       model_view = look_at(eye, at, up);
     }
   }
@@ -1132,9 +1216,7 @@ void specialkey(int key, int x, int y){
       printf("down\n");
     if(eye.y >= -r){
       printf("%f\n", eye.y);
-      eye.y-=0.05;
-      mat4 ro = rotate_x(PI/180);
-      //eye = mat_vec_mul(ro, eye);
+      eye.y-=0.09;
       model_view = look_at(eye, at, up);
     }
   }
@@ -1172,59 +1254,77 @@ void keyboard(unsigned char key, int mousex, int mousey)
     }
 
     if(key == 'F'){//front. counter clockwise
-      for(int i = 0; i < 9; i++){
-        ctm_array[i] = mat_mat_mul(rotate_z(PI/8), ctm_array[i]);
-      }
+      turn_cube(7);
     }
 
     if(key == 'b'){//back
       turn_cube(2);
     }
 
-    if(key == 'B'){//front. counter clockwise
-      for(int i = 0; i < 9; i++){
-        ctm_array[i] = mat_mat_mul(rotate_z(PI/8), ctm_array[i]);
-      }
+    if(key == 'B'){//back. counter clockwise
+      turn_cube(8);
     }
 
     if(key == 'u'){//up
       turn_cube(5);
     }
 
+    if(key == 'U'){//up
+      turn_cube(11);
+    }
+
     if(key == 'd'){//down
       turn_cube(6);
+    }
+
+    if(key == 'D'){//down
+      turn_cube(12);
     }
 
     if(key == 'l'){
       turn_cube(3);
     }
 
+    if(key == 'L'){
+      turn_cube(9);
+    }
+
     if(key == 'r'){
       turn_cube(4);
     }
 
+    if(key == 'R'){
+      turn_cube(10);
+    }
+
     if(key == 'x'){
       light_position.x+=0.1;
+      light_ctm = mat_mat_mul(trans_m(0.1, 0, 0), light_ctm);
     }
 
     if(key == 'X'){
       light_position.x-=0.1;
+      light_ctm = mat_mat_mul(trans_m(-0.1, 0, 0), light_ctm);
     }
 
     if(key == 'y'){
       light_position.y+=0.1;
+      light_ctm = mat_mat_mul(trans_m(0, 0.1, 0), light_ctm);
     }
 
     if(key == 'Y'){
       light_position.y-=0.1;
+      light_ctm = mat_mat_mul(trans_m(0, -0.1, 0), light_ctm);
     }
 
     if(key == 'z'){
       light_position.z+=0.1;
+      light_ctm = mat_mat_mul(trans_m(0, 0, 0.1), light_ctm);
     }
 
      if(key == 'Z'){
       light_position.z-=0.1;
+      light_ctm = mat_mat_mul(trans_m(0, 0, -0.1), light_ctm);
     }
 
     glutPostRedisplay();
@@ -1243,11 +1343,15 @@ void idle(void){
   //printf("%f\n", times);
   if(is_animate){
 
-    if(current_state == LEFT){
+    if(current_state == LEFT || current_state == LEFT_P){
       current_angle += change_angle;
       //SET CTMs
       for(int i = 0; i < 9; i++){
-        ctm_array[left[i]] = mat_mat_mul(rotate_x(change_angle), ctm_array[left[i]]);//set ctms
+        if(current_state == LEFT){
+          ctm_array[left[i]] = mat_mat_mul(rotate_x(change_angle), ctm_array[left[i]]);//set ctms
+        }else{
+          ctm_array[left[i]] = mat_mat_mul(rotate_x(-change_angle), ctm_array[left[i]]);//set ctms 
+        }
       }
 
       if(current_angle >= PI/2){
@@ -1256,10 +1360,14 @@ void idle(void){
         is_animate = 0;
       }
 
-    }else if(current_state == RIGHT){
+    }else if(current_state == RIGHT || current_state == RIGHT_P){
       current_angle += change_angle;
       for(int i = 0; i < 9; i++){
+        if(current_state == RIGHT){
           ctm_array[right[i]] = mat_mat_mul(rotate_x(-change_angle), ctm_array[right[i]]);//set ctms
+        }else{
+          ctm_array[right[i]] = mat_mat_mul(rotate_x(change_angle), ctm_array[right[i]]);//set ctms
+        }
       }
 
       printf("stop: %f\n", current_angle);
@@ -1270,12 +1378,16 @@ void idle(void){
         is_animate = 0;
       }
     
-    }else if(current_state == FRONT){
+    }else if(current_state == FRONT || current_state == FRONT_P){
       current_angle += change_angle;
       printf("angle: %f\n", current_angle);
       //SET CTMs
       for(int i = 0; i < 9; i++){
-        ctm_array[front[i]] = mat_mat_mul(rotate_z(-change_angle), ctm_array[front[i]]);
+        if(current_state == FRONT){
+          ctm_array[front[i]] = mat_mat_mul(rotate_z(-change_angle), ctm_array[front[i]]);
+        }else{
+          ctm_array[front[i]] = mat_mat_mul(rotate_z(change_angle), ctm_array[front[i]]);
+        }
       }
 
       if(current_angle >= PI/2){
@@ -1286,11 +1398,15 @@ void idle(void){
         is_animate = 0;
       }
 
-    }else if(current_state == BACK){
+    }else if(current_state == BACK || current_state == BACK_P){
       current_angle += change_angle;
       //SET CTMs
       for(int i = 0; i < 9; i++){
-        ctm_array[back[i]] = mat_mat_mul(rotate_z(change_angle), ctm_array[back[i]]);
+        if(current_state == BACK){
+          ctm_array[back[i]] = mat_mat_mul(rotate_z(change_angle), ctm_array[back[i]]);
+        }else{
+          ctm_array[back[i]] = mat_mat_mul(rotate_z(-change_angle), ctm_array[back[i]]);
+        }
       }
 
       if(current_angle >= PI/2){
@@ -1299,11 +1415,16 @@ void idle(void){
         //current_state = NONE;
       }
 
-    }else if(current_state == TOP){
+    }else if(current_state == TOP || current_state == TOP_P){
       current_angle += change_angle;
       //SET CTMs
       for(int i = 0; i < 9; i++){
-        ctm_array[top[i]] = mat_mat_mul(rotate_y(-change_angle), ctm_array[top[i]]);
+        if(current_state == TOP){
+          ctm_array[top[i]] = mat_mat_mul(rotate_y(-change_angle), ctm_array[top[i]]);
+        }else{
+          ctm_array[top[i]] = mat_mat_mul(rotate_y(change_angle), ctm_array[top[i]]);
+
+        }
       }
 
       if(current_angle >= PI/2){
@@ -1312,11 +1433,15 @@ void idle(void){
         //current_state = NONE;
       }
 
-    }else if(current_state == DOWN){
+    }else if(current_state == DOWN || current_state == DOWN_P){
       current_angle += change_angle;
       //SET CTMs
       for(int i = 0; i < 9; i++){
-        ctm_array[down[i]] = mat_mat_mul(rotate_y(change_angle), ctm_array[down[i]]);
+        if(current_state == DOWN){
+          ctm_array[down[i]] = mat_mat_mul(rotate_y(change_angle), ctm_array[down[i]]);
+        }else{
+          ctm_array[down[i]] = mat_mat_mul(rotate_y(-change_angle), ctm_array[down[i]]);
+        }
       }
 
       if(current_angle >= PI/2){
@@ -1338,10 +1463,7 @@ void idle(void){
                         3, 3, 5, 3, 3, 3, 2, 2, 2, 6, 
                         6, 1, 5, 5, 4, 4, 1, 1};
       */
-
-      int formula[30] = {1, 6, 6, 3, 3, 2, 6, 2, 2, 2, 1, 1,
-                         5, 5, 5, 1, 5, 1, 1, 5, 5, 1, 
-                         1, 1, 3, 6, 1, 1, 1, 5};
+       
 
       if(formula[step] == 1){
           turn_cube(1);
@@ -1355,6 +1477,18 @@ void idle(void){
           turn_cube(5);
         }else if(formula[step] == 6){
           turn_cube(6);
+        }else if(formula[step] == 7){
+          turn_cube(7);
+        }else if(formula[step] == 8){
+          turn_cube(8);
+        }else if(formula[step] == 9){
+          turn_cube(9);
+        }else if(formula[step] == 10){
+          turn_cube(10);
+        }else if(formula[step] == 11){
+          turn_cube(11);
+        }else if(formula[step] == 12){
+          turn_cube(12);
         }
 
         if(step == max_step){
@@ -1385,7 +1519,7 @@ int main(int argc, char **argv)
     glutKeyboardFunc(keyboard);
     
     glutMouseFunc(mouse);//mouse
-    glutMotionFunc(motion);//Motion
+    //glutMotionFunc(motion);//Motion
     glutReshapeFunc(reshape);
     glutIdleFunc(idle);
     glutMainLoop();
